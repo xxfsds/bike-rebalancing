@@ -1,0 +1,9 @@
+dataset,feature_set,split,rmse,r2,delta_r2
+real_uci,with_lag(12),RandomKFold,2.9558,0.837398,0.045706000000000024
+real_uci,with_lag(12),TimeSeriesSplit,3.0711,0.791692,0.045706000000000024
+real_uci,no_lag(9),RandomKFold,5.0416,0.526935,0.13969800000000004
+real_uci,no_lag(9),TimeSeriesSplit,5.2141,0.387237,0.13969800000000004
+synthetic,with_lag(12),RandomKFold,2.6038,0.818969,0.03370299999999993
+synthetic,with_lag(12),TimeSeriesSplit,2.8409,0.785266,0.03370299999999993
+synthetic,no_lag(9),RandomKFold,4.3683,0.490485,0.14252900000000002
+synthetic,no_lag(9),TimeSeriesSplit,5.0333,0.347956,0.14252900000000002

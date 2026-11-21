@@ -1,3 +1,7 @@
 model,seed,rmse,mae,r2,train_time,config
-rf,0,4.0122,2.6481,0.8548,18.05,"{'n_estimators': 120, 'max_depth': None, 'min_samples_leaf': 1}"
-ffbpn,0,4.314,3.0138,0.8318,3.87,"{'hidden_layer_sizes': (64, 32), 'alpha': 0.0001}"
+rf,0,2.8409,1.8787,0.7853,76.09,"{'n_estimators': 120, 'max_depth': 12, 'min_samples_leaf': 2}"
+rf,1,2.841,1.8784,0.7853,81.89,"{'n_estimators': 120, 'max_depth': 12, 'min_samples_leaf': 2}"
+rf,2,2.8398,1.8781,0.7854,76.6,"{'n_estimators': 120, 'max_depth': 12, 'min_samples_leaf': 2}"
+ffbpn,0,2.8969,1.9421,0.7682,224.87,"{'hidden_layer_sizes': (32, 16), 'alpha': 0.001}"
+ffbpn,1,2.8683,1.9446,0.7745,188.96,"{'hidden_layer_sizes': (32, 16), 'alpha': 0.001}"
+ffbpn,2,2.8389,1.8986,0.7805,180.41,"{'hidden_layer_sizes': (32, 16), 'alpha': 0.001}"

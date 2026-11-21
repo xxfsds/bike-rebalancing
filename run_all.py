@@ -47,6 +47,8 @@ def main():
     ap.add_argument("--budget", type=int, default=C.OPT_BUDGET, help="优化评估预算（三算法共用）")
     ap.add_argument("--fast", action="store_true", help="快速冒烟模式")
     ap.add_argument("--skip-e7", action="store_true")
+    ap.add_argument("--reuse-clean", action="store_true",
+                    help="复用 data/clean.csv（真实数据已就位时用），不重新生成合成数据")
     args = ap.parse_args()
 
     C.ensure_dirs()
@@ -58,7 +60,19 @@ def main():
 
     # ---------------- L0 ----------------
     banner("L0  data layer  (E1 clustering)")
-    df, stations, ks = DP.run(n_stations=args.stations, days=args.days, seed=0)
+    if args.reuse_clean and (C.DATA_DIR / "clean.csv").exists():
+        # 复用已有 clean.csv（真实数据路径）：只重建站点表与 E1，绝不调用
+        # DP.run/save_outputs，否则会用合成数据覆盖掉真实 clean.csv。
+        df = pd.read_csv(C.DATA_DIR / "clean.csv", parse_dates=["datetime"])
+        stations = DP.station_table(df)
+        _, labels, ks = DP.cluster_stations(DP.station_profiles(df), seed=0)
+        stations["cluster"] = labels
+        stations.round(4).to_csv(C.DATA_DIR / "stations.csv", index=False)
+        stations[["station_id", "cluster"]].to_csv(C.RES_DIR / "E1_cluster.csv", index=False)
+        ks.to_csv(C.RES_DIR / "E1_k_selection.csv", index=False)
+        print(f"[L0] 复用已有 clean.csv：{len(df)} 行 / {len(stations)} 站点")
+    else:
+        df, stations, ks = DP.run(n_stations=args.stations, days=args.days, seed=0)
     best_k = int(ks.loc[ks["silhouette"].idxmax(), "k"])
     print(f"[L0] 数据 {len(df)} 行 / {len(stations)} 站点；最优簇数 k={best_k}")
 
