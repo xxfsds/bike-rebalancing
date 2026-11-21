@@ -1,14 +1,40 @@
 {
+  "experiment": "M3 forecast layer — real UCI Bike Sharing panel",
+  "dataset": {
+    "source": "UCI Bike Sharing (hour.csv), stationised to 40 stations",
+    "rows": 695160,
+    "stations": 40,
+    "unique_timestamps": 17379,
+    "date_range": [
+      "2011-01-01 00:00:00",
+      "2012-12-31 23:00:00"
+    ]
+  },
   "seeds": [
-    0
+    0,
+    1,
+    2
   ],
-  "stations": 40,
-  "days": 60,
-  "budget": 600,
-  "fast": true,
+  "cv_splits": 5,
+  "test_size": 0.2,
+  "predictions_rows": 139040,
   "best_model": "rf",
-  "best_r2": 0.8548,
-  "elapsed_s": 147.0,
-  "n_jobs": 1,
-  "note": "N_JOBS=1 时 train_time 偏慢；本机可改 config.N_JOBS=-1"
+  "best_r2": 0.7853,
+  "n_jobs": -1,
+  "n_jobs_note": "measured with BR_N_JOBS=-1; the committed default stays 1 because sandboxed environments cannot create process pipes",
+  "environment": {
+    "python": "3.11.9",
+    "platform": "Windows-10-10.0.26300-SP0",
+    "numpy": "1.26.4",
+    "pandas": "2.2.3",
+    "scipy": "1.17.1",
+    "scikit_learn": "1.9.1",
+    "matplotlib": "3.10.8",
+    "cpu": "Intel(R) Core(TM) i9-14900HX (24C/32T)"
+  },
+  "selected_configs": {
+    "rf": "{'n_estimators': 120, 'max_depth': 12, 'min_samples_leaf': 2}",
+    "ffbpn": "{'hidden_layer_sizes': (32, 16), 'alpha': 0.001}"
+  },
+  "note": "论文数字只能从 results/*.csv 取；train_time 跨机器不可比，引用时须注明 n_jobs。"
 }
