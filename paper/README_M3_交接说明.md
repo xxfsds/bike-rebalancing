@@ -2,7 +2,8 @@
 
 > 交付人：M3（预测建模）　｜　日期：2026-11-21
 > 数据集：UCI Bike Sharing（hour.csv 摊分到 40 站点，17,379 小时戳，**695,160 行**，2011-01-01 → 2012-12-31）
-> 运行环境：Python 3.11.9 / scikit-learn 1.9.1 / numpy 1.26.4 / `N_JOBS = -1`（Intel i9-14900HX, 24C/32T）
+> 运行环境：Python 3.11.9 / scikit-learn 1.9.1 / numpy 1.26.4 / `BR_N_JOBS=-1`（Intel i9-14900HX, 24C/32T）
+> 注意：`config.N_JOBS` 的**默认值仍为 1**（手册要求受限环境必须为 1），本次结果用环境变量 `BR_N_JOBS=-1` 跑出。
 
 ---
 
@@ -102,6 +103,12 @@ RF 预测在 **100% 的行**上都不同，max|diff| = 4.74、mean|diff| = 0.21�
 **修复**：`--reuse-clean` 复用已有 `data/clean.csv`，只重建 stations.csv 与 E1，
 **不调用 `save_outputs`**。验证：clean.csv 的 SHA256 与字节数完全未变。
 
+### 补丁 D：`config.py` 的 `N_JOBS` 改为环境变量可覆盖（默认值不变）
+`N_JOBS = int(os.environ.get("BR_N_JOBS", 1))`。
+**默认值必须保持 1**——手册明确写了受限沙箱环境禁止创建进程管道，改默认值会坑到队友。
+需要加速时用 `BR_N_JOBS=-1 python forecast.py` 即可。
+本次论文数字就是用 `BR_N_JOBS=-1` 跑出的，`results/run_manifest.json` 里已记录。
+
 ---
 
 ## 4. §3.3 / §4.3 正文已写好
@@ -131,7 +138,7 @@ RF 预测在 **100% 的行**上都不同，max|diff| = 4.74、mean|diff| = 0.21�
 | 谁 | 要做什么 | 为什么 |
 |---|---|---|
 | **M1** | 决定论文主数据源：真实 UCI（推荐）还是合成 | 执行预案 M2 任务①本来就要 UCI；合成只是降级预案 |
-| **M1** | 采纳 `M3_patches.patch` 三个补丁 | 不采纳则 E3/E5 数字仍不可复现 |
+| **M1** | 采纳 `M3_patches.patch`（A/B/C 三个必需，D 建议） | 不采纳 A/B 则 E3/E5 数字仍不可复现 |
 | **M1** | 改 `run_all.py` 的 L0 用 `--reuse-clean`，别再用合成数据 | 否则真实数据会被覆盖 |
 | **M2** | 用真实 clean.csv 重建 stations.csv + E1（已备好方法，**不要调 `DP.run()`**） | E1 在真实数据上 k*=2 但轮廓系数只有 0.181（合成 0.516），簇分布 13:27，§4.2 必须如实交代 |
 | **M4** | E5/E6 必须重跑 | 每站装载量来自 base_demand，真实数据下均值从 8.96 降到 4.74，调度实例变了 |
@@ -150,8 +157,8 @@ cd bike_rebalancing
 git apply ..\M3_patches.patch
 # 3) 重建站点表与 E1（不要用 DP.run()，它会用合成数据覆盖 clean.csv）
 python -c "import sys,pandas as pd,config as C,data_pipeline as DP; df=pd.read_csv(C.DATA_DIR/'clean.csv',parse_dates=['datetime']); st=DP.station_table(df); _,lab,ks=DP.cluster_stations(DP.station_profiles(df),seed=0); st['cluster']=lab; st.round(4).to_csv(C.DATA_DIR/'stations.csv',index=False); st[['station_id','cluster']].to_csv(C.RES_DIR/'E1_cluster.csv',index=False); ks.to_csv(C.RES_DIR/'E1_k_selection.csv',index=False)"
-# 4) 跑预测层（约 38 分钟，i9-14900HX / N_JOBS=-1）
-python forecast.py
+# 4) 跑预测层（约 38 分钟，i9-14900HX；BR_N_JOBS=-1 加速，默认 1 也可）
+$env:BR_N_JOBS='-1'; python forecast.py
 # 5) 出图出表
 python report.py
 ```
