@@ -11,3 +11,6 @@ run_log.txt
 
 # 注意：results/ figures/ tables/ 必须入库。
 # 论文里的每个数字都要能追到 results/*.csv，图要能追到 figures/*.pdf。
+
+#一个组员的个人开发文件夹而已
+at/

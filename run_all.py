@@ -75,15 +75,20 @@ def main():
     banner("L2  optimization layer  (A* -> E5)")
     cost, astar_stats, _, _ = RT.build_cost_matrix(stations)
     ctx = OP.build_context(pred, stations, cost, seed=0)
-    e5, traces = OP.run_e5(ctx, seeds=seeds, runs=2 if args.fast else 3, budget=budget)
+    e5, traces, traces_x = OP.run_e5(ctx, seeds=seeds, runs=2 if args.fast else 5, budget=budget)
     tab3 = OP.summarise_e5(e5)
     np.savez(C.RES_DIR / "E5_traces.npz",
              **{k: np.array([np.asarray(h, dtype=float) for h in v], dtype=object)
                 for k, v in traces.items()})
+    # 每个轨迹点对应的真实评估次数，单独存一份：report.py 用它当 Fig.4 横轴
+    np.savez(C.RES_DIR / "E5_traces_x.npz",
+             **{k: np.array([np.asarray(x, dtype=float) for x in v], dtype=object)
+                for k, v in traces_x.items()})
 
     # ---------------- L3 ----------------
     banner("L3  evaluation layer  (E6 / E7 / figures)")
-    e6 = OP.run_e6(pred, stations, cost, seed=0, budget=budget)
+    e6 = OP.run_e6(pred, stations, cost, seed=0, budget=budget,
+                   rounds=8 if args.fast else 20)
     e7 = None
     if not args.skip_e7:
         e7 = OP.run_e7(sizes=(10, 30, 50), budget=600 if args.fast else 1000, seed=0)
