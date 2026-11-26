@@ -120,6 +120,11 @@ md = f"""# M3 预测层正文 —— §3.3 Methodology / §4.3 Implementation
 - 声明：所有随机性只来自传入的 seed；且**数据行序固定**——
   树模型的 bootstrap 按行索引抽样，同一 seed 在不同行序下抽到的是不同记录，
   会训出不同的模型。（本次补丁引入的 `canonical()` 就是为此。）
+- **输入端也可复现（已实测）**：真实面板不是手工整理的，而是由
+  `data_pipeline.run(raw_path="data/raw/hour.csv")` 从 UCI 官方 Bike Sharing
+  `hour.csv`（17,379 个小时戳）确定性生成。实测重建得到的 `data/clean.csv`
+  与仓库提交版本的 SHA256 完全相同（`0bb9f4d9...`），即逐字节一致。
+  因此本节与 §4.3 的全部数字都能从一份原始文件、一条命令从零复算。
 
 ---
 
@@ -133,6 +138,15 @@ md = f"""# M3 预测层正文 —— §3.3 Methodology / §4.3 Implementation
   `run_e3_main` / `run_e4_ablation` / `feature_importance` / `predict_all`。
 - 输入 `data/clean.csv`（由 M2 产出），输出 `results/E2|E3|E4|R2_*.csv`、
   `data/predictions.csv`、`tables/tab1|tab2`、`figures/fig3`。
+- **输入的来源与可复现性（已实测）**：`data/clean.csv` 由
+  `data_pipeline.run(raw_path="data/raw/hour.csv")` 从 UCI 官方 Bike Sharing
+  `hour.csv`（17,379 个小时戳 × 40 摊分站点 = 695,160 行）确定性生成；
+  原始文件已随仓库入库（1.1 MB），一条命令即可重建，实测重建结果与仓库
+  提交的 `clean.csv` **逐字节一致**（SHA256 `0bb9f4d9...`）。
+- **数据性质的如实交代（不可回避）**：UCI Hour 是**全市聚合**的逐小时计数，
+  本身没有站点维度；数据层用 Dirichlet 权重 + 二项抽样把它摊分成 40 个站点。
+  因此本文的 40 个站点是**合成站点**，其坐标与簇结构为方法验证而设，
+  不能表述为真实物理站点。该限制必须在 §4.1 与本节同时出现。
 
 ### 4.3.2 五个模型的实现细节
 - linear / ridge / lasso：`Pipeline(StandardScaler, est)`。
@@ -282,6 +296,13 @@ difference can alter the dispatching instance itself. All modelling entry
 points therefore apply a single canonical sort order before any estimator is
 fitted, which removes this failure mode entirely.
 
+The input panel is reproducible on the same footing. It is not hand-assembled:
+`data_pipeline.run(raw_path=...)` derives it deterministically from the
+archived UCI Bike Sharing hourly file, and the regenerated panel has been
+verified byte-identical to the committed copy by SHA256. Every number reported
+in this section can consequently be recomputed from a single raw file with one
+command, on any machine that runs the same dependency versions.
+
 ---
 
 ## 4.3 Implementation: The Prediction Layer
@@ -296,6 +317,20 @@ The module consumes `data/clean.csv` produced by the data layer and writes
 `results/E2_baseline.csv`, `results/E3_main.csv`, `results/E4_ablation.csv`,
 `results/R2_feat_importance.csv`, `data/predictions.csv`, and the tables and
 figure derived from them.
+
+The provenance of that input bounds what the results may be claimed to show,
+and is therefore stated explicitly. The committed `data/clean.csv` is produced
+deterministically by `data_pipeline.run(raw_path=...)` from the official UCI
+Bike Sharing hourly file, archived in the repository as `data/raw/hour.csv`;
+regenerating it reproduces the committed panel byte for byte, as verified by
+SHA256. The underlying hourly series, however, is a city-wide aggregate with
+no station dimension, so the data layer partitions it into 40 pseudo-stations
+using Dirichlet weights and a binomial draw. The stations used throughout this
+paper are therefore synthetic partitions rather than physical locations, and
+their coordinates and cluster structure are constructed for the purpose of
+validating the algorithmic pipeline. This restriction is acknowledged in
+Section 4.1 and should be read as a scope limitation of the experiments
+rather than as a description of a real bikesharing network.
 
 ### 4.3.2 Model implementations
 
