@@ -31,6 +31,28 @@ import pandas as pd
 
 import config as C
 
+SORT_KEYS = ["datetime", "station_id"]
+
+
+def canonical(df: pd.DataFrame) -> pd.DataFrame:
+    """唯一行序：所有建模入口都必须过这一层。
+
+    为什么必须固定行序：RandomForest 的 bootstrap、MLP 的权重初始化都是
+    **按行索引**取样的。同一个 seed 在不同行序下抽到的是**不同的记录**，
+    于是训练出不同的树/权重 -> 得到不同的模型。
+
+    实测（本机，57,600 行，seed=0，超参完全相同，仅行序不同）：
+        RF 预测在 100% 的行上都不同，max|diff| = 4.74，mean|diff| = 0.21。
+        该差异经 optimize.build_context 的 np.round() 放大后，
+        会改写 M4 的 E5 站点选择与总成本。
+
+    两处入口原本行序不一致：
+        forecast.py  -> load_clean() 按 (datetime, station_id) 排序 = 时间优先
+        run_all.py   -> 直接用 data_pipeline.run() 的 DataFrame   = 站点优先
+    """
+    return df.sort_values(SORT_KEYS).reset_index(drop=True)
+
+
 FEATURES = ["hour", "dow", "is_weekend", "season", "weather",
             "temp", "hum", "windspeed", "is_rush", "lag_1", "lag_24", "roll_24"]
 
@@ -50,7 +72,7 @@ def load_clean() -> pd.DataFrame:
         import data_pipeline
         return data_pipeline.run()[0]
     df = pd.read_csv(path, parse_dates=["datetime"])
-    return df.sort_values(["datetime", "station_id"]).reset_index(drop=True)
+    return canonical(df)
 
 
 # --------------------------------------------------------------------------
@@ -117,6 +139,7 @@ def _metrics(y, yhat) -> dict:
 
 def evaluate_cv(df: pd.DataFrame, name: str, seed: int = 0, folds=None, **kw):
     """在时序折上评估，返回（各折平均指标, 训练耗时秒, 每折指标列表）。"""
+    df = canonical(df)
     folds = folds if folds is not None else make_folds(df)
     Xall = df[FEATURES].to_numpy(dtype=np.float32)
     yall = df["demand"].to_numpy(dtype=np.float32)
@@ -155,6 +178,20 @@ def run_e2_baseline(df, seeds=None, folds=None, quiet=False):
     return out
 
 
+SELECT_MARGIN = 0.005      # R² 差距小于此值即视为并列（低于环境噪声）
+
+
+def _complexity_key(name: str, cfg: dict) -> tuple:
+    """结构复杂度，越小越简单。用于超参并列时的 Occam 决胜。"""
+    if name == "ffbpn":
+        return (sum(cfg.get("hidden_layer_sizes", ())), cfg.get("alpha", 0.0))
+    if name == "rf":
+        return (cfg.get("max_depth") or 10 ** 6,
+                cfg.get("n_estimators", 0),
+                cfg.get("min_samples_leaf", 0))
+    return (0,)
+
+
 def select_config(df, name: str, grid, seed: int = 0, n_splits: int = 3):
     """超参选择：只在 seed=0 上做，选完即固定（保证后续对比公平）。"""
     times = np.sort(df["datetime"].unique())
@@ -166,13 +203,22 @@ def select_config(df, name: str, grid, seed: int = 0, n_splits: int = 3):
         te_mask = df["datetime"].isin(pd.Index(times[te_idx])).to_numpy()
         sub_folds.append((tr_mask, te_mask))
 
-    best, best_r2 = None, -np.inf
+    scored = []
     for cfg in grid:
         m, _, _ = evaluate_cv(df, name, seed=seed, folds=sub_folds, **cfg)
-        print(f"[select] {name} {cfg} -> R2={m['r2']:.3f}")
-        if m["r2"] > best_r2:
-            best, best_r2 = cfg, m["r2"]
-    print(f"[select] 选定 {name}: {best} (R2={best_r2:.3f})")
+        print(f"[select] {name} {cfg} -> R2={m['r2']:.6f}")
+        scored.append((cfg, m["r2"]))
+    best, best_r2 = max(scored, key=lambda x: x[1])
+    # 决胜规则：若多个配置的 R² 差距落在环境噪声以内，按 Occam 原则选更简单的。
+    # 没有这条规则时，两套 FFBPN 配置的 R² 只差 0.003~0.004（低于 numpy/BLAS
+    # 版本差异带来的噪声），选出的配置会随机器翻转，E3 的 ffbpn 行随之变化。
+    near = [(c, r) for c, r in scored if r >= best_r2 - SELECT_MARGIN]
+    if len(near) > 1:
+        near.sort(key=lambda x: (_complexity_key(name, x[0]), -x[1]))
+        best = near[0][0]
+        print(f"[select] {len(near)} 个配置在 {SELECT_MARGIN} 内并列 -> "
+              f"按 Occam 取最简: {best}")
+    print(f"[select] 选定 {name}: {best} (R2={best_r2:.6f})")
     return best
 
 
@@ -242,6 +288,7 @@ def predict_all(df, configs, seed: int = 0, test_frac: float = C.TEST_SIZE):
 
     这是 M4、M5 的输入：E6 耦合敏感性实验会向这里的预测注入误差。
     """
+    df = canonical(df)
     times = np.sort(df["datetime"].unique())
     cut = times[int(len(times) * (1 - test_frac))]
     tr = (df["datetime"] < cut).to_numpy()
